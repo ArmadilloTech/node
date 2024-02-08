@@ -1,27 +1,21 @@
 // Import necessary modules
 import multer from 'multer';
 import { promisify } from 'util';
-import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import Photosaic from 'photosaic';
-
-// Define the new output path for storing mosaic images
-// Adjust the path as necessary based on your project structure
-const mosaicOutputPath = path.join(__dirname, '..', 'public', 'mosaics');
-// Ensure the mosaic output path exists
-fs.mkdirSync(mosaicOutputPath, { recursive: true });
+import { put } from '@vercel/blob';
+import { NextResponse } from 'next/server';
 
 // Set up multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     // Use the OS temporary directory for initial file uploads
-    const uploadPath = os.tmpdir();
-    cb(null, uploadPath);
+    cb(null, os.tmpdir());
   },
   filename: function (req, file, cb) {
     // Generate a unique file name for each uploaded file
-    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+    cb(null, `${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`);
   },
 });
 const upload = multer({ storage: storage });
@@ -35,6 +29,8 @@ export const config = {
 };
 
 // The API handler function
+// API Endpoint
+// The API handler function
 export default async function handler(req, res) {
   try {
     // Await the multer upload middleware to handle file upload
@@ -45,39 +41,58 @@ export default async function handler(req, res) {
       return res.status(400).send('No files uploaded.');
     }
 
+    // Get the gridNum parameter from the request body
+    const gridNum = parseInt(req.body.gridNum, 10);
+
+    // Validate the gridNum parameter
+    if (isNaN(gridNum) || gridNum < 1 || gridNum > 100) {
+      return res.status(400).send('Invalid gridNum parameter.');
+    }
+
     // Paths for the uploaded images
     const mainImagePath = req.files.mainImage[0].path;
     const tilesPaths = req.files.tiles.map(file => file.path);
     const options = {
-      gridNum: 30, // Increase for more detail
-      intensity: 0.5, // Adjust if necessary, but 0.5 is generally a good starting point
-      outputType: 'png', // Keep as 'png' for transparency support
-      outputWidth: 600, // Increase for a larger, more detailed mosaic
-      algo: 'closestColor', // Recommended for better definition
+      gridNum: gridNum,
+      intensity: 0.5,
+      outputType: 'png',
+      outputWidth: 600,
+      algo: 'closestColor',
     };
-    
+
     // Use Photosaic to generate the mosaic
-
     const mosaic = Photosaic(mainImagePath, tilesPaths, options);
-
     const finalMosaicBuffer = await mosaic.build();
 
-    // Define the path for saving the final mosaic image, using the new output path
-    const projectRoot = process.env.PROJECT_ROOT;
-    const finalMosaicFilename = `finalMosaic-${Date.now()}.png`;
+    // Upload the mosaic buffer to Vercel Blob Storage
+    const blobret = await put(`finalMosaic-${Date.now()}.png`, finalMosaicBuffer, {
+      access: 'public',
+    });
 
-    const finalMosaicPath = path.join(projectRoot, 'public', 'mosaics', `finalMosaic-${Date.now()}.png`);    await fs.promises.writeFile(finalMosaicPath, finalMosaicBuffer);
+    // Assuming you have a way to generate a public URL for the uploaded blob
+    // This URL generation method depends on how Vercel Blob Storage manages URLs for stored blobs
 
-    const webAccessiblePath = `/mosaics/${finalMosaicFilename}`;
-
-    // Respond with the path to the generated mosaic image
-    // Adjust the response as needed, for example, to return a URL to the image if serving over the web
+    // Return the public URL in the response
     res.status(200).json({
       message: 'Mosaic generated successfully.',
-      path: webAccessiblePath
+      path: blobret.url
     });
-      } catch (error) {
-    console.error('Failed to upload files:', error);
-    res.status(500).json({ error: 'Server error during file upload.' });
+  } catch (error) {
+    console.error('Failed to process files:', error);
+    res.status(500).json({ error: 'Server error during file processing.' });
   }
+}
+
+
+// Add the following code to your API routes
+export async function POST(request) {
+  const { searchParams } = new URL(request.url);
+  const filename = searchParams.get('filename');
+
+  // Upload the avatar to Vercel Blob Storage
+  const blob = await put(filename, request.body, {
+    access: 'public',
+  });
+
+  return NextResponse.json(blob);
 }
