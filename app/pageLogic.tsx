@@ -61,7 +61,7 @@ const Home: React.FC<HomeProps> = () => {
             type="number"
             id="gridNum"
             name="gridNum"
-            defaultValue="50"
+            defaultValue="10"
             min="1"
             max="100"
             onChange={handleGridNumChange}
@@ -73,7 +73,7 @@ const Home: React.FC<HomeProps> = () => {
             type="number"
             id="outputWidth"
             name="outputWidth"
-            defaultValue="800"
+            defaultValue="250"
             min="1"
             max="10000"
             onChange={handleOutputWidthChange}
