@@ -143,7 +143,6 @@ export default function MosaicGenerator() {
           open={lightboxOpen}
           close={() => setLightboxOpen(false)}
           slides={slides}
-          initialSlide={lightboxIndex}
           plugins={[Download,Zoom]}
         />
       )}
